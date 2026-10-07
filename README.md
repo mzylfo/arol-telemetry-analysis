@@ -1,36 +1,66 @@
-# AROL Analytics
+# AROL Analytics — Industrial Telemetry Analysis & AI Agent
 
-An agentic AI pipeline for analyzing telemetry data from a 36-head AROL capping machine: raw daily CSV exports are cleaned and reconstructed into per-closure events, summarized by 14 deterministic analytics tools, exposed to natural-language questions through an LLM-backed agent (with a fully deterministic fallback when no LLM is available), and made accessible through a guided-menu-or-free-text terminal chat interface.  
-Built for PoliTo "System and Device Programming" course final project.
+[![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/)
+[![Tests](https://img.shields.io/badge/Tests-139%20passed-brightgreen.svg)](tests/)
+[![Institution](https://img.shields.io/badge/Politecnico%20di%20Torino-SDP%20Project-003366.svg)](https://www.polito.it/)
+[![License](https://img.shields.io/badge/Academic-Project-orange.svg)]()
+
+An end-to-end industrial data engineering and agentic AI pipeline for telemetry analysis on a **36-head AROL rotary capping machine**.
+
+Raw high-frequency telemetry exports (~4.6 GB, 77.5M rows across 89 daily CSV files) are reconstructed in a streaming pipeline into per-closure events, analyzed by 14 deterministic analytical tools, exposed to natural-language querying via an LLM-powered agent (with grounded synthesis and deterministic fallback), and made accessible through an interactive terminal interface.
+
+> Developed for the **System and Device Programming** course (Prof. Stefano Quer)  
+> **Politecnico di Torino** — M.Sc. in Computer Engineering.
+
+---
+
+## 👥 Authors & Roles
+
+- **[Matteo Zylfo](https://github.com/mzylfo)** — **Layer 1 Lead**: Industrial context analysis, streaming ingestion architecture, cross-day `CarryState` event boundary handling, closure event reconstruction ($\Delta\text{Count} > 0$), flicker filtering, and data quality validation.
+- **[Christian Priska](https://github.com/christianpriska)** — **Layer 4 Lead**: Terminal bot interface, deterministic result formatters, end-to-end demo workflow, and system integration.
+- **Irene** — **Layers 2 & 3 Lead**: 14 deterministic analytics functions (torque statistics, anomaly detection, statistical tests, KPIs), LLM semantic routing, and grounded query synthesis.
+
+📄 **Slides & Presentation:** see [`presentation/Q3 - Project presentation.pdf`](presentation/Q3%20-%20Project%20presentation.pdf).
+
+---
+
+## 🚀 Key Highlights
+
+- **Streaming Big-Data Ingestion:** Processed 89 daily CSV files (~4.6 GB, 77.5M rows) into compressed Parquet (`closure_events.parquet`, `idle_periods.parquet`) with constant memory consumption, ensuring cross-day state continuity with `CarryState`.
+- **Event Reconstruction:** Accurately isolated 55.9M inferred closures from discrete 1 Hz PLC sampling, distinguishing true machine stops/resets from electrical bus flickers.
+- **14 Deterministic Analytics Tools:** Outlier detection (IQR / Z-score), torque variability, Welch's t-test and Mann-Whitney U for head comparisons, failure code categorization, and idle gap analysis.
+- **Zero-Hallucination Agent:** LLM (Ollama / local or cloud) used strictly for semantic tool routing and grounded natural-language summarization; all numerical calculations remain 100% deterministic.
+- **Resilient Fallback:** Fully operational even without an active LLM backend via keyword-based routing.
+- **Robust Test Coverage:** 139 automated tests covering all 4 layers with synthetic datasets and zero external API dependencies.
+
+---
 
 ## Architecture
 
 Four layers, each building on the last:
 
 1. **Ingestion** (`src/arol_analytics/ingestion/`) - 89 raw wide-format CSVs → two clean Parquet datasets (`closure_events.parquet`, `idle_periods.parquet`) plus a JSON/Markdown data-quality report.
-
-2. **Analytics** (`src/arol_analytics/analytics/`) - 14 deterministic tools (success rate, torque statistics/trend/correlation, anomaly detection, head comparison, failure analysis, production speed, idle analysis, KPI dashboard, event listing, chart rendering) over the Layer-1 output. `src/arol_analytics/reports/` renders three of these into polished Markdown report templates (KPI dashboard, anomaly report, head comparison report) — see "Report templates" below.
-
+2. **Analytics** (`src/arol_analytics/analytics/`) - 14 deterministic tools (success rate, torque statistics/trend/correlation, anomaly detection, head comparison, failure analysis, production speed, idle analysis, KPI dashboard, event listing, chart rendering) over the Layer-1 output. `src/arol_analytics/reports/` renders three of these into polished Markdown report templates (KPI dashboard, anomaly report, head comparison report).
 3. **Agent** (`src/arol_analytics/agent/`) - routes a natural-language question to one or more Layer-2 tools via an LLM (Ollama, local or cloud), with a deterministic keyword-based fallback when no LLM is reachable. Plain numeric questions are answered by deterministic formatters; "why"/"explain"/multi-tool questions get a prose write-up the LLM composes strictly from the tool results (no recomputed or invented numbers).
-
-4. **Terminal bot** (`src/arol_analytics/bot/`) - a local terminal chat interface (guided menu + free-text questions) over Layers 2 and 3. **Note**: despite the module name, this is a local terminal simulator, not a network-facing Telegram bot - it reuses `python-telegram-bot`'s keyboard classes purely as an in-memory data container. No bot token, no polling, no network service.
+4. **Terminal bot** (`src/arol_analytics/bot/`) - a local terminal chat interface (guided menu + free-text questions) over Layers 2 and 3. Reuses `python-telegram-bot`'s keyboard classes purely as an in-memory data container (no network service required).
 
 Full detail, including a data-flow diagram, real dataset statistics, the complete status-code reference, every tool's method/parameters/caveats, and a traced agent-routing example, is in [`docs/`](docs/) - see the links at the bottom of this file.
 
+---
+
 ## Prerequisites
 
-- **Python 3.12+** (developed and tested with Python 3.14). The pinned NumPy and SciPy versions require Python 3.12 or newer; verify the interpreter version before creating the virtual environment.
-- **An LLM backend for Layer 3/4's free-question mode - optional.** Only [Ollama](https://ollama.com) is supported (`src/arol_analytics/agent/llm.py`), either:
-  - a **local** `ollama serve` instance (`http://localhost:11434`, no auth requires `ollama pull <model>` first), or
-  - **Ollama Cloud** (`https://ollama.com`) - no local install needed, just an API key from [ollama.com/settings/keys](https://ollama.com/settings/keys).
-  - Without either, the agent and bot still work fully via deterministic keyword routing - this is not a hard requirement to run the project.
-- **No Telegram token, no network service** - Layer 4 is a local terminal interface (see the architecture note above).
+- **Python 3.12+** (developed and tested with Python 3.14). The pinned NumPy and SciPy versions require Python 3.12 or newer.
+- **An LLM backend for Layer 3/4's free-question mode (Optional).** Supports [Ollama](https://ollama.com) (`src/arol_analytics/agent/llm.py`), either local (`ollama serve`) or Ollama Cloud. Without either, the agent and bot still run fully via deterministic keyword routing.
+- **No external network service required** — Layer 4 is a local terminal interface.
+
+---
 
 ## Installation
 
 ```bash
-git clone <this-repo-url>
-cd ArolProjectQ3
+git clone https://github.com/mzylfo/arol-telemetry-analysis.git
+cd arol-telemetry-analysis
 python3 --version                  # must be 3.12 or newer
 python3 -m venv .venv
 source .venv/bin/activate
